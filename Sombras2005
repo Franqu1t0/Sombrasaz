@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>La Sombra Ascendente</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+        :root {
+            --night-plomo: #2c3e50;
+            --light-gray: #ecf0f1;
+            --dark-plataform: #3d495b;
+            --spikes: #e74c3c;
+            --moving-light: #f1c40f;
+            --fading-platform: #9b59b6;
+        }
+
+        body {
+            background-color: var(--night-plomo);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            flex-direction: column;
+            font-family: 'Press Start 2P', cursive;
+            color: var(--light-gray);
+            text-align: center;
+            overflow: hidden;
+        }
+
+        #game-container {
+            position: relative;
+            border: 5px solid var(--light-gray);
+            box-shadow: 0 0 20px rgba(255, 255, 0, 0.5);
+            background-color: var(--night-plomo);
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #message-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(26, 26, 26, 0.9);
+            border: 3px solid var(--light-gray);
+            padding: 20px;
+            text-align: center;
+            z-index: 100;
+            display: none;
+            box-shadow: 0 0 15px var(--light-gray);
+        }
+
+        #message-box h2 {
+            margin-top: 0;
+            font-size: 1.5rem;
+            color: var(--light-gray);
+        }
+
+        #message-box p {
+            margin: 10px 0 20px;
+            font-size: 0.8rem;
+            color: var(--light-gray);
+        }
+
+        #message-box button {
+            background-color: var(--light-gray);
+            color: var(--night-plomo);
+            border: none;
+            padding: 10px 20px;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 0.7rem;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        #message-box button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 10px var(--light-gray);
+        }
+
+        #controls {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        #button-row {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .control-button {
+            background-color: var(--night-plomo);
+            color: var(--light-gray);
+            border: 2px solid var(--light-gray);
+            padding: 10px 15px;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 0.7rem;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.2s, color 0.2s, transform 0.2s;
+            box-shadow: 0 4px 6px rgba(255, 255, 0, 0.5);
+        }
+
+        .control-button:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 4px rgba(255, 255, 0, 0.5);
+        }
+
+        #level-indicator {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 0.8rem;
+            color: var(--light-gray);
+        }
+
+        #lives-container {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 5px;
+            font-size: 1.5rem;
+        }
+        
+        .heart {
+            color: var(--spikes);
+            text-shadow: 1px 1px 2px black;
+        }
+
+        #instructions {
+            font-size: 0.8rem;
+            text-align: center;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="level-indicator">Nivel: 1</div>
+        <div id="lives-container">
+            <span class="heart">❤️</span>
+            <span class="heart">❤️</span>
+            <span class="heart">❤️</span>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <div id="controls">
+        <div id="button-row">
+            <button id="left-btn" class="control-button">← Izquierda</button>
+            <button id="jump-btn" class="control-button">Salto ↑</button>
+            <button id="right-btn" class="control-button">Derecha →</button>
+        </div>
+        <p id="instructions">
+            Controles: **W** para SALTAR, **A** para IZQUIERDA, **D** para DERECHA
+        </p>
+    </div>
+
+    <div id="message-box">
+        <h2 id="message-title">¡Juego Completado!</h2>
+        <p id="message-text">¡Has encontrado a la otra sombra! ¡El viaje ha terminado!</p>
+        <button id="message-btn">Cerrar</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const messageBox = document.getElementById('message-box');
+        const messageTitle = document.getElementById('message-title');
+        const messageText = document.getElementById('message-text');
+        const messageBtn = document.getElementById('message-btn');
+        const levelIndicator = document.getElementById('level-indicator');
+        const livesContainer = document.getElementById('lives-container');
+
+        const leftBtn = document.getElementById('left-btn');
+        const rightBtn = document.getElementById('right-btn');
+        const jumpBtn = document.getElementById('jump-btn');
+
+        const GAME_WIDTH = 800;
+        const GAME_HEIGHT = 400;
+        const GROUND_HEIGHT = 30;
+        let scale = 1;
+
+        const player = {
+            x: 50,
+            y: 0,
+            width: 20,
+            height: 40,
+            dx: 0,
+            dy: 0,
+            speed: 3,
+            jumpStrength: 8,
+            onGround: false,
+        };
+
+        let currentLevel = 1;
+        let lives = 3;
+        let isGameOver = false;
+        let isGameWon = false;
+        let lastTime = 0;
+        
+        const shadowColor = '#000';
+        const platformColor = '#4a5568';
+        const goalPlatformColor = '#3d495b';
+        const spikeColor = 'red';
+        const fadingPlatformColor = '#9b59b6';
+        const LIGHT_SPEED = 1.2; 
+
+        let movingLights = []; 
+
+        const stars = [];
+        const numStars = 100;
+        for (let i = 0; i < numStars; i++) {
+            stars.push({
+                x: Math.random() * GAME_WIDTH,
+                y: Math.random() * GAME_HEIGHT,
+                radius: Math.random() * 1.5,
+                alpha: Math.random()
+            });
+        }
+        
+        function drawPersonShadow(x, y) {
+            ctx.fillStyle = shadowColor;
+            ctx.beginPath();
+            // Head
+            ctx.arc(x + player.width / 2, y, 8, 0, Math.PI * 2);
+            // Body
+            ctx.fillRect(x + player.width / 4, y + 15, player.width / 2, 20);
+            // Arms
+            ctx.fillRect(x, y + 15, 5, 15);
+            ctx.fillRect(x + player.width - 5, y + 15, 5, 15);
+            // Legs
+            ctx.fillRect(x + 2, y + 35, 7, 15);
+            ctx.fillRect(x + 11, y + 35, 7, 15);
+            ctx.fill();
+        }
+
+        const levels = [
+            null,
+            { // Nivel 1
+                platforms: [
+                    { x: 0, y: 350, width: 100, height: 20 },
+                    { x: 120, y: 300, width: 80, height: 20 },
+                    { x: 230, y: 250, width: 60, height: 20 },
+                    { x: 320, y: 200, width: 50, height: 20 },
+                    { x: 410, y: 150, width: 40, height: 20 },
+                    { x: 500, y: 100, width: 30, height: 20 },
+                    { x: 600, y: 150, width: 50, height: 20 },
+                    { x: 700, y: 200, width: 50, height: 20 },
+                    { x: 600, y: 250, width: 50, height: 20 },
+                    { x: 500, y: 300, width: 50, height: 20 },
+                    { x: 400, y: 350, width: 50, height: 20 },
+                    { x: 10, y: 200, width: 40, height: 20 },
+                    { x: 80, y: 150, width: 60, height: 20 },
+                    { x: 180, y: 100, width: 50, height: 20 },
+                    { x: 280, y: 50, width: 70, height: 20 },
+                    { x: 450, y: 280, width: 90, height: 20 },
+                    { x: 580, y: 320, width: 80, height: 20 },
+                    { x: 700, y: 100, width: 50, height: 20 },
+                    { x: 350, y: 30, width: 50, height: 20 },
+                    { x: 20, y: 250, width: 50, height: 20 },
+                    { x: 70, y: 50, width: 50, height: 20 },
+                ],
+                spikes: [
+                    { x: 280, y: 230, width: 50, height: 20 },
+                    { x: 500, y: 80, width: 50, height: 20 },
+                    { x: 350, y: 280, width: 80, height: 20 },
+                    { x: 100, y: 180, width: 50, height: 20 },
+                ],
+                fadingPlatforms: [
+                    { x: 20, y: 150, width: 40, height: 20, alpha: 1, isFading: false },
+                    { x: 450, y: 200, width: 60, height: 20, alpha: 1, isFading: false },
+                    { x: 650, y: 100, width: 50, height: 20, alpha: 1, isFading: false }
+                ],
+                goalX: 600,
+                start: { x: 20, y: 310 },
+            },
+            { // Nivel 2
+                platforms: [
+                    { x: 0, y: 350, width: 150, height: 20 },
+                    { x: 180, y: 300, width: 80, height: 20 },
+                    { x: 300, y: 250, width: 60, height: 20 },
+                    { x: 400, y: 200, width: 100, height: 20 },
+                    { x: 550, y: 250, width: 100, height: 20 },
+                    { x: 680, y: 300, width: 80, height: 20 },
+                    { x: 250, y: 150, width: 50, height: 20 },
+                    { x: 450, y: 100, width: 50, height: 20 },
+                    { x: 600, y: 100, width: 50, height: 20 },
+                    { x: 700, y: 150, width: 50, height: 20 },
+                    { x: 600, y: 200, width: 50, height: 20 },
+                    { x: 500, y: 250, width: 50, height: 20 },
+                    { x: 400, y: 300, width: 50, height: 20 },
+                    { x: 300, y: 350, width: 50, height: 20 },
+                    { x: 100, y: 200, width: 60, height: 20 },
+                    { x: 10, y: 250, width: 70, height: 20 },
+                    { x: 500, y: 50, width: 40, height: 20 },
+                    { x: 350, y: 50, width: 80, height: 20 },
+                    { x: 20, y: 100, width: 50, height: 20 },
+                    { x: 150, y: 100, width: 50, height: 20 },
+                    { x: 200, y: 50, width: 50, height: 20 },
+                    { x: 50, y: 50, width: 50, height: 20 },
+                ],
+                spikes: [
+                    { x: 220, y: 280, width: 40, height: 20 },
+                    { x: 500, y: 180, width: 50, height: 20 },
+                    { x: 150, y: 80, width: 50, height: 20 },
+                    { x: 450, y: 330, width: 80, height: 20 }
+                ],
+                fadingPlatforms: [
+                    { x: 350, y: 300, width: 60, height: 20, alpha: 1, isFading: false },
+                    { x: 180, y: 200, width: 50, height: 20, alpha: 1, isFading: false },
+                    { x: 600, y: 50, width: 60, height: 20, alpha: 1, isFading: false }
+                ],
+                goalX: 100,
+                start: { x: 20, y: 310 },
+            },
+            { // Nivel 3
+                platforms: [
+                    { x: 0, y: 350, width: 100, height: 20 },
+                    { x: 120, y: 300, width: 80, height: 20 },
+                    { x: 250, y: 250, width: 150, height: 20 }, // Plataforma principal
+                    { x: 450, y: 200, width: 100, height: 20 },
+                    { x: 600, y: 150, width: 120, height: 20 },
+                    { x: 750, y: 100, width: 50, height: 20 },
+                    
+                    { x: 100, y: 200, width: 50, height: 20 },
+                    { x: 200, y: 150, width: 50, height: 20 },
+                    { x: 300, y: 100, width: 50, height: 20 },
+                    { x: 400, y: 50, width: 50, height: 20 },
+                    { x: 500, y: 100, width: 50, height: 20 },
+                    { x: 600, y: 50, width: 50, height: 20 },
+                    { x: 700, y: 100, width: 50, height: 20 },
+                    { x: 50, y: 150, width: 50, height: 20 },
+                    { x: 150, y: 100, width: 50, height: 20 },
+                    { x: 250, y: 50, width: 50, height: 20 },
+                    { x: 50, y: 320, width: 50, height: 20 },
+                    { x: 150, y: 50, width: 50, height: 20 },
+                    { x: 20, y: 200, width: 40, height: 20 },
+                    { x: 180, y: 250, width: 60, height: 20 },
+                    { x: 420, y: 300, width: 50, height: 20 },
+                    { x: 520, y: 350, width: 80, height: 20 },
+                    { x: 680, y: 300, width: 50, height: 20 },
+                    { x: 300, y: 320, width: 50, height: 20 },
+                    { x: 580, y: 250, width: 50, height: 20 },
+                    { x: 730, y: 200, width: 50, height: 20 },
+                    { x: 400, y: 150, width: 50, height: 20 },
+                    { x: 200, y: 100, width: 50, height: 20 },
+                ],
+                spikes: [
+                    { x: 150, y: 280, width: 50, height: 20 },
+                    { x: 400, y: 180, width: 50, height: 20 },
+                    { x: 650, y: 130, width: 50, height: 20 },
+                    { x: 300, y: 230, width: 50, height: 20 },
+                    { x: 50, y: 130, width: 50, height: 20 },
+                    { x: 480, y: 80, width: 50, height: 20 },
+                ],
+                fadingPlatforms: [
+                    { x: 300, y: 180, width: 50, height: 20, alpha: 1, isFading: false },
+                    { x: 550, y: 200, width: 50, height: 20, alpha: 1, isFading: false },
+                    { x: 700, y: 220, width: 50, height: 20, alpha: 1, isFading: false },
+                    { x: 180, y: 150, width: 50, height: 20, alpha: 1, isFading: false }
+                ],
+                goalX: 750,
+                start: { x: 20, y: 310 },
+            },
+            { // Nivel 4
+                platforms: [
+                    { x: 0, y: 350, width: 100, height: 20 },
+                    { x: 100, y: 300, width: 50, height: 20 },
+                    { x: 200, y: 250, width: 50, height: 20 },
+                    { x: 300, y: 200, width: 50, height: 20 },
+                    { x: 400, y: 150, width: 50, height: 20 },
+                    { x: 500, y: 100, width: 50, height: 20 },
+                    { x: 600, y: 50, width: 50, height: 20 },
+                    { x: 700, y: 100, width: 50, height: 20 },
+                    { x: 600, y: 150, width: 50, height: 20 },
+                    { x: 500, y: 200, width: 50, height: 20 },
+                    { x: 400, y: 250, width: 50, height: 20 },
+                    { x: 300, y: 300, width: 50, height: 20 },
+                    { x: 200, y: 350, width: 50, height: 20 },
+                    { x: 150, y: 150, width: 50, height: 20 },
+                    { x: 250, y: 100, width: 50, height: 20 },
+                    { x: 350, y: 50, width: 50, height: 20 },
+                    { x: 120, y: 200, width: 60, height: 20 },
+                    { x: 280, y: 150, width: 40, height: 20 },
+                    { x: 480, y: 250, width: 50, height: 20 },
+                    { x: 650, y: 300, width: 70, height: 20 },
+                    { x: 750, y: 200, width: 50, height: 20 },
+                ],
+                spikes: [
+                    { x: 150, y: 280, width: 50, height: 20 },
+                    { x: 350, y: 180, width: 50, height: 20 },
+                    { x: 550, y: 80, width: 50, height: 20 },
+                    { x: 700, y: 80, width: 50, height: 20 },
+                    { x: 450, y: 330, width: 80, height: 20 },
+                ],
+                fadingPlatforms: [
+                    { x: 400, y: 320, width: 60, height: 20, alpha: 1, isFading: false },
+                    { x: 200, y: 180, width: 40, height: 20, alpha: 1, isFading: false },
+                    { x: 500, y: 50, width: 50, height: 20, alpha: 1, isFading: false },
+                    { x: 700, y: 250, width: 40, height: 20, alpha: 1, isFading: false }
+                ],
+                goalX: 200,
+                start: { x: 20, y: 310 },
+            },
+            { // Nivel 5
+                platforms: [
+                    { x: 0, y: 350, width: 100, height: 20 },
+                    { x: 120, y: 300, width: 50, height: 20 },
+                    { x: 200, y: 250, width: 80, height: 20 },
+                    { x: 300, y: 200, width: 120, height: 20 },
+                    { x: 450, y: 150, width: 60, height: 20 },
+                    { x: 550, y: 100, width: 80, height: 20 },
+                    { x: 700, y: 50, width: 100, height: 20 },
+                    { x: 100, y: 200, width: 50, height: 20 },
+                    { x: 250, y: 150, width: 50, height: 20 },
+                    { x: 400, y: 100, width: 50, height: 20 },
+                    { x: 500, y: 250, width: 50, height: 20 },
+                    { x: 650, y: 200, width: 50, height: 20 },
+                    { x: 750, y: 300, width: 50, height: 20 },
+                    { x: 600, y: 350, width: 50, height: 20 },
+                    { x: 450, y: 300, width: 50, height: 20 },
+                    { x: 300, y: 250, width: 50, height: 20 },
+                    { x: 20, y: 100, width: 50, height: 20 },
+                    { x: 180, y: 50, width: 50, height: 20 },
+                    { x: 350, y: 320, width: 50, height: 20 },
+                    { x: 80, y: 50, width: 50, height: 20 },
+                    { x: 180, y: 200, width: 50, height: 20 },
+                    { x: 550, y: 200, width: 50, height: 20 },
+                    { x: 320, y: 300, width: 60, height: 20 },
+                ],
+                spikes: [
+                    { x: 150, y: 280, width: 50, height: 20 },
+                    { x: 400, y: 180, width: 50, height: 20 },
+                    { x: 550, y: 230, width: 50, height: 20 },
+                    { x: 650, y: 80, width: 50, height: 20 },
+                    { x: 10, y: 80, width: 50, height: 20 },
+                    { x: 450, y: 280, width: 50, height: 20 },
+                    { x: 200, y: 180, width: 50, height: 20 },
+                ],
+                fadingPlatforms: [
+                    { x: 200, y: 100, width: 60, height: 20, alpha: 1, isFading: false },
+                    { x: 500, y: 100, width: 60, height: 20, alpha: 1, isFading: false },
+                    { x: 300, y: 150, width: 60, height: 20, alpha: 1, isFading: false },
+                    { x: 650, y: 150, width: 60, height: 20, alpha: 1, isFading: false }
+                ],
+                goalX: 400,
+                start: { x: 20, y: 310 },
+            }
+        ];
+        
+        const goal = { width: 60, height: 20, y: 80 }; 
+        const moon = { x: GAME_WIDTH - 100, y: 80, radius: 40 };
+
+        function updateLivesDisplay() {
+            livesContainer.innerHTML = '';
+            for (let i = 0; i < lives; i++) {
+                const heart = document.createElement('span');
+                heart.classList.add('heart');
+                heart.textContent = '❤️';
+                livesContainer.appendChild(heart);
+            }
+        }
+
+        function resizeCanvas() {
+            scale = Math.min(window.innerWidth / GAME_WIDTH, window.innerHeight / GAME_HEIGHT);
+            canvas.width = GAME_WIDTH * scale;
+            canvas.height = GAME_HEIGHT * scale;
+            ctx.scale(scale, scale);
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        function init() {
+            isGameOver = false;
+            isGameWon = false;
+            
+            const level = levels[currentLevel];
+            
+            player.x = level.start.x;
+            player.y = level.start.y;
+            player.dx = 0;
+            player.dy = 0;
+            player.onGround = true;
+
+            if (currentLevel > 5) {
+                currentLevel = 1;
+            }
+
+            // Generate exactly two moving lights with specific behaviors
+            movingLights = [];
+            const lightSpeed = 1.0; 
+            
+            // Light 1: Moves horizontally
+            movingLights.push({
+                x: 100, 
+                y: 150, 
+                radius: 45,
+                dx: lightSpeed,
+                dy: 0,
+            });
+            
+            // Light 2: Moves randomly
+            movingLights.push({
+                x: 700,
+                y: 300,
+                radius: 45,
+                dx: (Math.random() > 0.5 ? 1 : -1) * lightSpeed,
+                dy: (Math.random() > 0.5 ? 1 : -1) * lightSpeed
+            });
+
+            levelIndicator.textContent = `Nivel: ${currentLevel}`;
+            updateLivesDisplay();
+            hideMessageBox();
+            resizeCanvas();
+            gameLoop(0);
+        }
+
+        function gameLoop(timestamp) {
+            if (isGameOver || isGameWon) return;
+
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+
+            update(deltaTime);
+            draw();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function update(deltaTime) {
+            const level = levels[currentLevel];
+            
+            player.dy += 0.3;
+            player.x += player.dx;
+            player.y += player.dy;
+            
+            let onSurface = false;
+            
+            for (const platform of level.platforms) {
+                if (
+                    player.x < platform.x + platform.width &&
+                    player.x + player.width > platform.x &&
+                    player.y + player.height > platform.y &&
+                    player.y + player.height <= platform.y + player.dy + 1
+                ) {
+                    player.y = platform.y - player.height;
+                    player.dy = 0;
+                    onSurface = true;
+                }
+            }
+
+            for (const fplatform of level.fadingPlatforms) {
+                if (
+                    player.x < fplatform.x + fplatform.width &&
+                    player.x + player.width > fplatform.x &&
+                    player.y + player.height > fplatform.y &&
+                    player.y + player.height <= fplatform.y + player.dy + 1
+                ) {
+                    player.y = fplatform.y - player.height;
+                    player.dy = 0;
+                    onSurface = true;
+                    fplatform.isFading = true;
+                }
+            }
+            
+            if (
+                player.x < level.goalX + goal.width &&
+                player.x + player.width > level.goalX &&
+                player.y < goal.y + goal.height &&
+                player.y + player.height > goal.y
+            ) {
+                 if (currentLevel < 5) {
+                    lives = 3; 
+                    currentLevel++;
+                    init();
+                } else {
+                    isGameWon = true;
+                    showMessageBox("¡Victoria!", "¡Has encontrado a la otra sombra! ¡El viaje ha terminado!", "Cerrar", () => {
+                        hideMessageBox();
+                    });
+                }
+                return;
+            }
+
+            if (player.y + player.height >= GAME_HEIGHT - GROUND_HEIGHT) {
+                player.y = GAME_HEIGHT - GROUND_HEIGHT - player.height;
+                player.dy = 0;
+                onSurface = true;
+            }
+
+            player.onGround = onSurface;
+            
+            level.fadingPlatforms.forEach(fplatform => {
+                if (fplatform.isFading) {
+                    fplatform.alpha -= 0.02;
+                    if (fplatform.alpha <= 0) {
+                        level.fadingPlatforms = level.fadingPlatforms.filter(p => p !== fplatform);
+                    }
+                }
+            });
+            
+            for (const spike of level.spikes) {
+                if (
+                    player.x < spike.x + spike.width &&
+                    player.x + player.width > spike.x &&
+                    player.y < spike.y + spike.height &&
+                    player.y + player.height > spike.y
+                ) {
+                    loseLifeAndReset();
+                    return;
+                }
+            }
+
+            for (const light of movingLights){
+                const distance = Math.hypot(player.x + player.width / 2 - light.x, player.y + player.height / 2 - light.y);
+                if (distance < light.radius + Math.max(player.width, player.height) / 2) {
+                    loseLifeAndReset();
+                    return;
+                }
+            }
+
+            for(const light of movingLights){
+                light.x += light.dx;
+                light.y += light.dy;
+                if (light.x < 0 || light.x > GAME_WIDTH) {
+                    light.dx *= -1;
+                }
+                if (light.y < 0 || light.y > GAME_HEIGHT) {
+                    light.dy *= -1;
+                }
+            }
+        }
+        
+        function loseLifeAndReset() {
+            lives--;
+            updateLivesDisplay();
+            if (lives <= 0) {
+                showMessageBox("¡Juego Terminado!", "Te has quedado sin vidas. Reiniciando...", "Cerrar", () => {
+                    hideMessageBox();
+                    currentLevel = 1;
+                    lives = 3;
+                    init();
+                });
+                isGameOver = true;
+            } else {
+                player.x = levels[currentLevel].start.x;
+                player.y = levels[currentLevel].start.y;
+            }
+        }
+        
+        function drawBackground() {
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(moon.x, moon.y, moon.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = 'white';
+            stars.forEach(star => {
+                ctx.globalAlpha = star.alpha;
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1;
+        }
+
+        function drawPlatform(platform) {
+            ctx.fillStyle = platformColor;
+            ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+        }
+
+        function drawFadingPlatform(fplatform) {
+            ctx.fillStyle = `rgba(155, 89, 182, ${fplatform.alpha})`;
+            ctx.fillRect(fplatform.x, fplatform.y, fplatform.width, fplatform.height);
+        }
+
+        function drawSpikes(spike) {
+            ctx.fillStyle = spikeColor;
+            const numSpikes = Math.floor(spike.width / 10);
+            for (let i = 0; i < numSpikes; i++) {
+                ctx.beginPath();
+                const x = spike.x + i * 10;
+                const y = spike.y;
+                ctx.moveTo(x, y + spike.height);
+                ctx.lineTo(x + 5, y);
+                ctx.lineTo(x + 10, y + spike.height);
+                ctx.fill();
+            }
+        }
+
+        function drawGoal(goalX) {
+            const doorWidth = goal.width * 0.8;
+            const doorHeight = goal.height * 1.5;
+            const doorX = goalX + (goal.width - doorWidth) / 2;
+            const doorY = goal.y - doorHeight;
+
+            ctx.fillStyle = '#333';
+            ctx.beginPath();
+            ctx.moveTo(doorX, goal.y);
+            ctx.lineTo(doorX, doorY);
+            ctx.arc(doorX + doorWidth / 2, doorY, doorWidth / 2, Math.PI, Math.PI * 2, false);
+            ctx.lineTo(doorX + doorWidth, goal.y);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.fillStyle = '#0a0a0a';
+            ctx.beginPath();
+            ctx.moveTo(doorX + 5, goal.y);
+            ctx.lineTo(doorX + 5, doorY);
+            ctx.arc(doorX + doorWidth / 2, doorY, doorWidth / 2 - 5, Math.PI, Math.PI * 2, false);
+            ctx.lineTo(doorX + doorWidth - 5, goal.y);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+            drawBackground();
+
+            const level = levels[currentLevel];
+            
+            ctx.fillStyle = '#4a5568';
+            ctx.fillRect(0, GAME_HEIGHT - GROUND_HEIGHT, GAME_WIDTH, GROUND_HEIGHT);
+            
+            for (const platform of level.platforms) {
+                drawPlatform(platform);
+            }
+            
+            for (const fplatform of level.fadingPlatforms) {
+                drawFadingPlatform(fplatform);
+            }
+
+            for (const spike of level.spikes) {
+                drawSpikes(spike);
+            }
+            
+            drawGoal(level.goalX);
+
+            for(const light of movingLights){
+                const gradient = ctx.createRadialGradient(light.x, light.y, 1, light.x, light.y, light.radius);
+                gradient.addColorStop(0, 'rgba(255, 255, 0, 0.8)');
+                gradient.addColorStop(1, 'rgba(255, 255, 0, 0)');
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(light.x, light.y, light.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            drawPersonShadow(player.x, player.y);
+        }
+        
+        window.addEventListener('keydown', (e) => {
+            if (isGameOver || isGameWon) return;
+
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+                player.dx = player.speed;
+            } else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+                player.dx = -player.speed;
+            } else if ((e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === ' ') && player.onGround) {
+                player.dy = -player.jumpStrength;
+                player.onGround = false;
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'd' || e.key === 'a' || e.key === 'D' || e.key === 'A') {
+                player.dx = 0;
+            }
+        });
+        
+        leftBtn.addEventListener('touchstart', (e) => { e.preventDefault(); player.dx = -player.speed; });
+        leftBtn.addEventListener('touchend', () => { player.dx = 0; });
+        rightBtn.addEventListener('touchstart', (e) => { e.preventDefault(); player.dx = player.speed; });
+        rightBtn.addEventListener('touchend', () => { player.dx = 0; });
+        jumpBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (player.onGround) {
+                player.dy = -player.jumpStrength;
+                player.onGround = false;
+            }
+        });
+        jumpBtn.addEventListener('touchend', () => {});
+
+        function showMessageBox(title, message, buttonText, action) {
+            messageTitle.textContent = title;
+            messageText.textContent = message;
+            messageBtn.textContent = buttonText;
+            messageBtn.onclick = () => {
+                hideMessageBox();
+                action();
+            };
+            messageBox.style.display = 'block';
+        }
+
+        function hideMessageBox() {
+            messageBox.style.display = 'none';
+        }
+
+        window.onload = function() {
+            init();
+        };
+    </script>
+</body>
+</html>
