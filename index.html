@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>La Sombra Ascendente</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
@@ -17,13 +19,8 @@
         }
 
         body {
+            @apply flex flex-col items-center justify-center min-h-screen p-4;
             background-color: var(--night-plomo);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            flex-direction: column;
             font-family: 'Press Start 2P', cursive;
             color: var(--light-gray);
             text-align: center;
@@ -174,6 +171,17 @@
         <button id="message-btn">Cerrar</button>
     </div>
 
+    <!-- Audio Elements -->
+    <audio id="bg-audio" loop>
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-sci-fi-ambience-1402.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="hit-audio">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-sword-swipe-1707.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="win-audio">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-game-level-completed-2059.mp3" type="audio/mpeg">
+    </audio>
+
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
@@ -187,6 +195,26 @@
         const leftBtn = document.getElementById('left-btn');
         const rightBtn = document.getElementById('right-btn');
         const jumpBtn = document.getElementById('jump-btn');
+
+        // Audio elements
+        const bgAudio = document.getElementById('bg-audio');
+        const hitAudio = document.getElementById('hit-audio');
+        const winAudio = document.getElementById('win-audio');
+
+        // Sonido para el salto (tipo "TUC")
+        const jumpSynth = new Tone.MembraneSynth({
+            pitchDecay: 0.05,
+            octaves: 10,
+            oscillator: { type: "sine" },
+            envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.4 },
+        }).toDestination();
+
+        // Sonido para el Game Over (tipo destello)
+        const gameOverSynth = new Tone.NoiseSynth({
+            noise: { type: "pink" },
+            envelope: { attack: 0.005, decay: 0.1, sustain: 0 },
+        }).toDestination();
+
 
         const GAME_WIDTH = 800;
         const GAME_HEIGHT = 400;
@@ -524,6 +552,7 @@
             updateLivesDisplay();
             hideMessageBox();
             resizeCanvas();
+            bgAudio.play().catch(e => console.log("Audio playback failed:", e));
             gameLoop(0);
         }
 
@@ -582,13 +611,18 @@
                 player.y + player.height > goal.y
             ) {
                  if (currentLevel < 5) {
+                    winAudio.play();
                     lives = 3; 
                     currentLevel++;
                     init();
                 } else {
                     isGameWon = true;
+                    bgAudio.pause();
+                    winAudio.play();
                     showMessageBox("¡Victoria!", "¡Has encontrado a la otra sombra! ¡El viaje ha terminado!", "Cerrar", () => {
                         hideMessageBox();
+                        bgAudio.currentTime = 0;
+                        init();
                     });
                 }
                 return;
@@ -618,6 +652,7 @@
                     player.y < spike.y + spike.height &&
                     player.y + player.height > spike.y
                 ) {
+                    hitAudio.play();
                     loseLifeAndReset();
                     return;
                 }
@@ -626,6 +661,7 @@
             for (const light of movingLights){
                 const distance = Math.hypot(player.x + player.width / 2 - light.x, player.y + player.height / 2 - light.y);
                 if (distance < light.radius + Math.max(player.width, player.height) / 2) {
+                    hitAudio.play();
                     loseLifeAndReset();
                     return;
                 }
@@ -647,6 +683,8 @@
             lives--;
             updateLivesDisplay();
             if (lives <= 0) {
+                bgAudio.pause();
+                gameOverSynth.triggerAttackRelease("4n", "+0.2");
                 showMessageBox("¡Juego Terminado!", "Te has quedado sin vidas. Reiniciando...", "Cerrar", () => {
                     hideMessageBox();
                     currentLevel = 1;
@@ -772,6 +810,7 @@
             } else if ((e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === ' ') && player.onGround) {
                 player.dy = -player.jumpStrength;
                 player.onGround = false;
+                jumpSynth.triggerAttackRelease("C3", "8n");
             }
         });
 
@@ -790,6 +829,7 @@
             if (player.onGround) {
                 player.dy = -player.jumpStrength;
                 player.onGround = false;
+                jumpSynth.triggerAttackRelease("C3", "8n");
             }
         });
         jumpBtn.addEventListener('touchend', () => {});
